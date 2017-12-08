@@ -1,0 +1,18 @@
+{
+  "name": "shared-chunks-plugin",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "format": "prettier --single-quote --trailing-comma es5 --tab-width 4 --write index.js",
+    "test": "jest"
+  },
+  "author": "Kevin Barabash",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^21.2.1",
+    "memory-fs": "^0.4.1",
+    "prettier": "^1.9.1",
+    "webpack": "^3.9.1"
+  }
+}
