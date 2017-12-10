@@ -23,8 +23,8 @@ function createCompiler(entryPoints) {
         entry: entryPoints,
         output: {
             path: `${__dirname}/dist`,
-            filename: '[name].[chunkhash].js',
-            chunkFilename: '[id].[name].[chunkhash].js',
+            filename: '[name].js',
+            chunkFilename: '[name].js',
         },
         plugins: [
             new SharedChunksPlugin({
@@ -103,6 +103,10 @@ describe('shared-chunk-plugin', () => {
             expect([...chunkToModulesMap.vendor].sort()).toEqual([
                 'test/fixtures/vendor/dep1.js',
                 'test/fixtures/vendor/dep2.js',
+            ]);
+
+            expect([...chunkToModulesMap['feature-shared']].sort()).toEqual([
+                'test/fixtures/features/percent.js',
             ]);
 
             const chunkDependencies = {};
@@ -226,6 +230,64 @@ describe('shared-chunk-plugin', () => {
             expect(chunkDependencies.components).toBeUndefined();
             expect(chunkDependencies.vendor).toBeUndefined();
             expect(chunkDependencies['feature-shared']).toEqual([]);
+        });
+    });
+
+    it('should extract shared modules from async chunks', () => {
+        const compiler = createCompiler({
+            'async-consumer': path.resolve(__dirname, 'fixtures/features/async-consumer.js'),
+            foo: path.resolve(__dirname, 'fixtures/features/foo.js'),
+        });
+        compiler.outputFileSystem = new MemoryFileSystem();
+
+        return compile(compiler).then((stats) => {
+            const {assets, chunks, modules} = stats.compilation;
+            const chunkToModulesMap = {};
+
+            for (const module of modules) {
+                for (const chunk of module.chunks) {
+                    // async chunks don't have a name so we'll use they're id
+                    // instead
+                    const chunkName = chunk.name || chunk.id;
+                    if (!chunkToModulesMap.hasOwnProperty(chunkName)) {
+                        chunkToModulesMap[chunkName] = new Set();
+                    }
+                    chunkToModulesMap[chunkName].add(module.portableId);
+                }
+            }
+
+            expect([...chunkToModulesMap['async-consumer']].sort()).toEqual([
+                'test/fixtures/features/async-consumer.js',
+            ]);
+
+            expect([...chunkToModulesMap['0']].sort()).toEqual([
+                'test/fixtures/features/async-dep.js',
+                'test/fixtures/features/async-value.js',
+            ]);
+
+            expect([...chunkToModulesMap['feature-shared']].sort()).toEqual([
+                'test/fixtures/features/percent.js',
+            ]);
+
+            const chunkDependencies = {};
+            for (const chunk of chunks) {
+                chunkDependencies[chunk.name || chunk.id] = chunk.parents.map(dep => dep.name);
+                if (chunk.name === null) {
+                    // console.log(chunk);
+                    for (const module of chunk._modules) {
+                        console.log(module.portableId);
+                    }
+                }
+            }
+
+            expect(chunkDependencies.components).toEqual(['vendor']);
+            expect(chunkDependencies.vendor).toEqual([]);
+            expect(chunkDependencies['feature-shared']).toEqual([]);
+            expect(chunkDependencies['async-consumer']).toEqual([]);
+            // async-consumer is a moot dependency of 0.js b/c async-consumer
+            // loads 0.js.
+            expect(chunkDependencies['0']).toEqual(
+                ['vendor', 'components', 'feature-shared', 'async-consumer']);
         });
     });
 });
