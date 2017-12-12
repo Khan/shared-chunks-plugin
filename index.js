@@ -94,7 +94,8 @@ class SharedChunkPlugin {
                     // Sort dependencies based on the order in which they should
                     // be loaded.
                     chunk.parents = chunk.parents.sort(
-                        (a, b) => a.parents.includes(b) ? 1 : -1);
+                        (a, b) => (a.parents.includes(b) ? 1 : -1)
+                    );
                 }
             });
         });
@@ -128,15 +129,20 @@ class SharedChunkPlugin {
         // Affected chunks will have one or more modules removed from them.
         // This will also include new chunks generated from previous calls to
         // processSharedSpec.
-        const affectedChunks = spec.selectedChunks
+        const selectedChunks = spec.selectedChunks
             ? allChunks.filter(chunk => {
-                  return spec.selectedChunks.includes(chunk.name);
+                  // We automatically include all async chunks which are chunks
+                  // whose names are null.
+                  return (
+                      spec.selectedChunks.includes(chunk.name) ||
+                      chunk.name === null
+                  );
               })
             : allChunks;
 
         // Track how chunks each module appears in.
         const commonModulesToCountMap = new Map();
-        for (const chunk of affectedChunks) {
+        for (const chunk of selectedChunks) {
             for (const module of chunk.modulesIterable) {
                 // TODO(kevinb): add an option to also exclude modules that are
                 // already part of globalModulesSet, currently our filters
@@ -158,6 +164,11 @@ class SharedChunkPlugin {
         const minChunks = spec.minChunks || 1;
         const commonModules = new Set();
         for (const [module, count] of commonModulesToCountMap) {
+            // TODO(kevinb): have different counters and thresolds for modules
+            // that appear in entry chunks, async chunks, or both.
+            // TODO(kevinb): add a setting to allow a separate shared chunk to
+            // be created from modules that appear in async chunks but not in
+            // entry chunks.
             if (count >= minChunks) {
                 commonModules.add(module);
                 globalModulesSet.add(module);
@@ -210,20 +221,21 @@ class SharedChunkPlugin {
 
         // It's possible that moduleFilter function filters out all modules
         // from a particular chunk in which case it isn't actually affected.
-        // TODO(kevinb): figure out what to do when extracting common
-        // chunks from async chunks, see CommonsChunkPlugin
-        const actuallyAffectedChunks = new Set();
+        const affectedChunks = new Set();
         for (const module of commonModules) {
-            for (const chunk of affectedChunks) {
+            for (const chunk of allChunks) {
+                if (!selectedChunks.includes(chunk) && chunk.name !== null) {
+                    continue;
+                }
                 if (module.removeChunk(chunk)) {
-                    actuallyAffectedChunks.add(chunk);
+                    affectedChunks.add(chunk);
                 }
             }
         }
 
         // Copied from makeTargetChunkParentOfAffectedChunks in
         // CommonsChunkPlugin.js with targetChunk renamed to sharedChunk.
-        for (const chunk of actuallyAffectedChunks) {
+        for (const chunk of affectedChunks) {
             chunk.parents = [...chunk.parents, sharedChunk];
             sharedChunk.addChunk(chunk);
 
